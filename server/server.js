@@ -1,42 +1,46 @@
 const express = require("express");
 const cors = require("cors");
-const bodyParser = require("body-parser");
-const youtubedl = require("youtube-dl-exec");
-const path = require("path");
+const ytdl = require("ytdl-core");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-// ✅ Detect FFmpeg (Windows & Linux)
-const ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg"; // On Windows, set it via env
-
-const downloadFile = async (req, res, type, format) => {
-    const { url } = req.body;
-    if (!url) return res.status(400).json({ error: "URL is required" });
+// ✅ Route to Download MP3
+app.get("/download/mp3", async (req, res) => {
+    const { url } = req.query;
+    if (!ytdl.validateURL(url)) return res.status(400).json({ error: "Invalid URL" });
 
     try {
-        res.setHeader("Content-Disposition", `attachment; filename="download.${type}"`);
-        res.setHeader("Content-Type", type === "mp3" ? "audio/mpeg" : "video/mp4");
+        res.setHeader("Content-Disposition", 'attachment; filename="audio.mp3"');
+        res.setHeader("Content-Type", "audio/mpeg");
 
-        const options = {
-            output: "-",
-            format: format,
-            ffmpegLocation: ffmpegPath,
-        };
-
-        const process = youtubedl.exec(url, options, { stdio: ["ignore", "pipe", "ignore"] });
-
-        process.stdout.pipe(res);
+        const stream = ytdl(url, { filter: "audioonly", quality: "highestaudio" });
+        stream.pipe(res);
     } catch (error) {
-        console.error(`${type.toUpperCase()} Download failed:`, error);
-        res.status(500).json({ error: `${type.toUpperCase()} Download failed` });
+        console.error("MP3 Download Error:", error);
+        res.status(500).json({ error: "Failed to download MP3" });
     }
-};
+});
 
-app.post("/download/mp3", (req, res) => downloadFile(req, res, "mp3", "bestaudio"));
-app.post("/download/mp4", (req, res) => downloadFile(req, res, "mp4", "best[ext=mp4]/best"));
+// ✅ Route to Download MP4
+app.get("/download/mp4", async (req, res) => {
+    const { url } = req.query;
+    if (!ytdl.validateURL(url)) return res.status(400).json({ error: "Invalid URL" });
 
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+    try {
+        res.setHeader("Content-Disposition", 'attachment; filename="video.mp4"');
+        res.setHeader("Content-Type", "video/mp4");
+
+        const stream = ytdl(url, { quality: "highestvideo" });
+        stream.pipe(res);
+    } catch (error) {
+        console.error("MP4 Download Error:", error);
+        res.status(500).json({ error: "Failed to download MP4" });
+    }
+});
+
+// ✅ Start Server
+app.listen(PORT, "0.0.0.0", () => console.log(`✅ Server running on port ${PORT}`));
