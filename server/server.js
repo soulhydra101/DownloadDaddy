@@ -2,61 +2,41 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const youtubedl = require("youtube-dl-exec");
+const path = require("path");
 
 const app = express();
+const PORT = process.env.PORT || 5000;
+
 app.use(cors());
 app.use(bodyParser.json());
 
-const FFmpegPath = "C:\\ffmpeg\\bin\\ffmpeg.exe"; // Ensure correct path for FFmpeg
+// ✅ Detect FFmpeg (Windows & Linux)
+const ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg"; // On Windows, set it via env
 
-// ✅ Route for downloading MP3
-app.post("/download/mp3", async (req, res) => {
+const downloadFile = async (req, res, type, format) => {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: "URL is required" });
 
     try {
+        res.setHeader("Content-Disposition", `attachment; filename="download.${type}"`);
+        res.setHeader("Content-Type", type === "mp3" ? "audio/mpeg" : "video/mp4");
+
         const options = {
             output: "-",
-            format: "bestaudio",
-            extractAudio: true,
-            audioFormat: "mp3",
-            ffmpegLocation: FFmpegPath,
+            format: format,
+            ffmpegLocation: ffmpegPath,
         };
-
-        res.setHeader("Content-Disposition", 'attachment; filename="audio.mp3"');
-        res.setHeader("Content-Type", "audio/mpeg");
 
         const process = youtubedl.exec(url, options, { stdio: ["ignore", "pipe", "ignore"] });
 
         process.stdout.pipe(res);
     } catch (error) {
-        console.error("MP3 Download failed:", error);
-        res.status(500).json({ error: "MP3 Download failed", details: error.message });
+        console.error(`${type.toUpperCase()} Download failed:`, error);
+        res.status(500).json({ error: `${type.toUpperCase()} Download failed` });
     }
-});
+};
 
-// ✅ Route for downloading MP4
-app.post("/download/mp4", async (req, res) => {
-    const { url } = req.body;
-    if (!url) return res.status(400).json({ error: "URL is required" });
+app.post("/download/mp3", (req, res) => downloadFile(req, res, "mp3", "bestaudio"));
+app.post("/download/mp4", (req, res) => downloadFile(req, res, "mp4", "best[ext=mp4]/best"));
 
-    try {
-        const options = {
-            output: "-",
-            format: "best[ext=mp4]+bestaudio[ext=m4a]/best",
-            ffmpegLocation: FFmpegPath,
-        };
-
-        res.setHeader("Content-Disposition", 'attachment; filename="video.mp4"');
-        res.setHeader("Content-Type", "video/mp4");
-
-        const process = youtubedl.exec(url, options, { stdio: ["ignore", "pipe", "ignore"] });
-
-        process.stdout.pipe(res);
-    } catch (error) {
-        console.error("MP4 Download failed:", error);
-        res.status(500).json({ error: "MP4 Download failed", details: error.message });
-    }
-});
-
-app.listen(5000, () => console.log("Server running on port 5000"));
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
